@@ -1,0 +1,15 @@
+version: '2'
+
+services:
+  sequel:
+    image: mysql:latest
+    volumes:
+      - ./files/data:/var/lib/mysql-files
+    environment:
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "3306:3306"
+  sqlite:
+    image: sqlite:latest
+    volumes:
+      - ./files/data:/usr/src/tmp

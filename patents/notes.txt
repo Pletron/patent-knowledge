@@ -1,0 +1,8 @@
+Match Level 	: 1
+Matches on 		: Firstname, Lastname, Country, PubYear, Patent
+
+Match Level 	: 2
+Matches on 		: Lastname, Country, PubYear, Patent
+
+Match Level 	: 3
+Matches on 		: Country, PubYear, Patent
