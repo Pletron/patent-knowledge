@@ -19,8 +19,8 @@ def findpatent(patent, db):
         query.append("(Country LIKE '%s' OR Country LIKE '')" %
                      inventor['Country'])
         if len(patent['Patent_ID']) > 1:
-            query.append("PubYear=%d AND (Patent LIKE '%s' OR Patent LIKE '%s')" % (patent['PubYear'],
-                                                                                    patent['Patent_ID'][0], patent['Patent_ID'][1]))
+            query.append("PubYear=%d AND (Patent LIKE '%s' OR Patent LIKE '%s' OR Patent LIKE '%s' OR Patent LIKE '%s' OR Patent LIKE '%s' OR Patent LIKE '%s')" % (patent['PubYear'],
+                                                                                                                                                                    patent['Patent_ID'][0], patent['Patent_ID'][1], patent['Patent_ID'][2], patent['Patent_ID'][3], patent['Patent_ID'][4], patent['Patent_ID'][5]))
         else:
             query.append("PubYear=%d AND Patent LIKE '%s'" % (patent['PubYear'],
                                                               patent['Patent_ID'][0]))
@@ -31,7 +31,7 @@ def findpatent(patent, db):
             result = cur.fetchall()
 
             if len(result) == 1:
-                update_query = "UPDATE inventors SET Company_ID='%s', Match_Level='%d', Citing='%d', Cited='%d', Classification='%s' WHERE Patent='%s'" % (
+                update_query = "UPDATE inventors_v2 SET Company_ID='%s', Match_Level='%d', Citing='%d', Cited='%d', Classification='%s' WHERE Patent='%s'" % (
                     patent['Company_ID'], (x + 1), patent['Citing'], patent['Cited'], patent['Classification'], result[0][0])
                 cur.execute(update_query)
                 db.commit()
@@ -52,7 +52,6 @@ def findpatent(patent, db):
                 'Firstname'], patent['Inventors'][0]['Lastname'], patent['Inventors'][0]['Country'], patent['PubYear'], patent['Company_ID'], patent['Pat_ID'])
         cur.execute(fail_query)
         db.commit()
-
     return found
 
 
@@ -114,11 +113,12 @@ def capturepatid(patent_id):
             patent_id += '%'
         patent_ids.append(patent_id)
     else:
-
+        prefix = ['0', 'D', 'H', 'P', 'R']
+        patent_id
         patent_ids.append(patent_id + "%")
-        patent_id = patent_id[
-            : digit_pos] + '%' + patent_id[digit_pos:]
-        patent_ids.append(patent_id)
+        for pre in prefix:
+            patent_ids.append(patent_id[
+                : digit_pos] + pre + patent_id[digit_pos:])
     return patent_ids
 
 
@@ -151,7 +151,7 @@ def main(argv):
     db = MySQLdb.connect(host="127.0.0.1",
                          user="root",
                          passwd="",
-                         db="patents")
+                         db="patent_research_v2")
     cur = db.cursor()
     company_id = ''
     print '\n\n### Running matches ###\n'
@@ -163,57 +163,57 @@ def main(argv):
 
             if event is 'end' and elem.tag.endswith('record'):
                 pubyear = int(elem.getchildren()[8].text.split('/')[0])
-                if (pubyear <= 2012 and pubyear >= 1982):
+                # if (pubyear <= 2012 and pubyear >= 1982):
 
-                    pat_id = str(elem.getchildren()[1].text)
-                    check_query = "SELECT EXISTS(SELECT 1 FROM processed_patents WHERE patent_id='%s')" % (
-                        pat_id)
-                    cur.execute(check_query)
-                    if cur.fetchone()[0] != 1:
-                        patent_id = capturepatid(pat_id)
-                        inventors = splitinventors(
-                            elem.getchildren()[6], elem.getchildren()[7])
+                pat_id = str(elem.getchildren()[1].text)
+                check_query = "SELECT EXISTS(SELECT 1 FROM processed_patents WHERE patent_id='%s')" % (
+                    pat_id)
+                cur.execute(check_query)
+                if cur.fetchone()[0] != 1:
+                    patent_id = capturepatid(pat_id)
+                    inventors = splitinventors(
+                        elem.getchildren()[6], elem.getchildren()[7])
 
-                        for owner in elem.getchildren()[2]:
-                            if owner.text:
-                                company_id = owner.text
+                    for owner in elem.getchildren()[2]:
+                        if owner.text:
+                            company_id = owner.text
 
-                        try:
-                            citing = int(elem.getchildren()[3].text)
-                        except:
-                            citing = 0
+                    try:
+                        citing = int(elem.getchildren()[3].text)
+                    except:
+                        citing = 0
 
-                        try:
-                            cited = int(elem.getchildren()[4].text)
-                        except:
-                            cited = 0
-                        classification = str(elem.getchildren()[5].text)
+                    try:
+                        cited = int(elem.getchildren()[4].text)
+                    except:
+                        cited = 0
+                    classification = str(elem.getchildren()[5].text)
 
-                        patent = {
-                            'PubYear': pubyear,
-                            'Pat_ID': pat_id,
-                            'Patent_ID': patent_id,
-                            'Inventors': inventors,
-                            'Company_ID': company_id,
-                            'Citing': citing,
-                            'Cited': cited,
-                            'Classification': classification
-                        }
+                    patent = {
+                        'PubYear': pubyear,
+                        'Pat_ID': pat_id,
+                        'Patent_ID': patent_id,
+                        'Inventors': inventors,
+                        'Company_ID': company_id,
+                        'Citing': citing,
+                        'Cited': cited,
+                        'Classification': classification
+                    }
 
-                        result = findpatent(patent, db)
-                        if not result:
-                            failcount += 1
-                        else:
-                            successcount += 1
-
-                        update_query = "INSERT INTO processed_patents (patent_id) VALUES('%s')" % (
-                            pat_id)
-                        cur.execute(update_query)
-                        db.commit()
+                    result = findpatent(patent, db)
+                    if not result:
+                        failcount += 1
                     else:
-                        ignorecount += 1
+                        successcount += 1
+
+                    update_query = "INSERT INTO processed_patents (patent_id) VALUES('%s')" % (
+                        pat_id)
+                    cur.execute(update_query)
+                    db.commit()
                 else:
                     ignorecount += 1
+                # else:
+                #     ignorecount += 1
 
                 progress = float(file.tell()) / total_size
                 sys.stdout.write('\rFilename: %s - Processed: %s\t| Failed: %d Success: %d Ignored: %d' %
