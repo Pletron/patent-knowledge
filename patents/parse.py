@@ -9,7 +9,7 @@ import xml.etree.ElementTree as etree
 
 def findpatent(patent, db):
     cur = db.cursor()
-    base_query = "SELECT DISTINCT Patent FROM inventors WHERE "
+    base_query = "SELECT DISTINCT Patent FROM inventors_v2 WHERE "
     found = False
     for inventor in patent['Inventors']:
         query = []
@@ -151,7 +151,7 @@ def main(argv):
     db = MySQLdb.connect(host="127.0.0.1",
                          user="root",
                          passwd="",
-                         db="patent_research_v2")
+                         db="patent_research_base")
     cur = db.cursor()
     company_id = ''
     print '\n\n### Running matches ###\n'

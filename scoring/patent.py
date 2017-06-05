@@ -20,63 +20,140 @@ def connectToDB(db):
 
 
 def main(argv):
-    db = connectToDB("patent_research")
+    db = connectToDB("patent_research_dev")
     db['cursor'].execute("SET sql_mode=''")
     db['cursor'].execute(
-        "SELECT COUNT(ID) FROM Patents WHERE ApplicationDate != 'None'")
+        "SELECT COUNT(ID) FROM Patents WHERE AppDate != 'None'")
 
     patentCount = int(db['cursor'].fetchone()[0])
-    pages = 200
+    pages = 2000
     offset = patentCount / pages
 
     for page in range(pages + 1):
 
-        db['cursor'].execute("SELECT ID, ApplicationDate FROM Patents WHERE ApplicationDate != 'None' ORDER BY ApplicationDate LIMIT %d,%d;" % (
-            page, offset))
+        db['cursor'].execute("SELECT ID, AppDate FROM Patents WHERE AppDate != 'None' LIMIT %d,%d;" % (
+            page * offset, offset))
         patents = db['cursor'].fetchall()
-
         patentScore = []
 
         for patent in patents:
-            query = "SELECT a.ID, InventorsWithExp, UniquePatents, UniqueCompanies, "
-            query += "UniqueIndustries, UniquePatentClasses, c.Collaborations FROM (SELECT ppi.Patent "
-            query += "AS ID, Count(pi.Inventor) AS ColabCount, p.ApplicationDate, pi.Patent FROM "
-            query += "PatentsInventors AS pi INNER JOIN (SELECT Inventor, Patent, ApplicationDate "
-            query += "FROM PatentsInventors AS pi INNER JOIN Patents AS p ON p.ID = pi.Patent "
-            query += "WHERE Patent = '%s' AND ApplicationDate IS NOT NULL) AS ppi ON ppi.Inventor " % patent[
-                0]
-            query += "= pi.Inventor INNER JOIN Patents AS p ON p.ID = pi.Patent INNER JOIN "
-            query += "Inventors AS i ON i.ID = pi.Inventor INNER JOIN Companies AS c ON c.ID = p.Company "
-            query += "WHERE p.ID != ppi.Patent AND p.ApplicationDate <= ppi.ApplicationDate GROUP "
-            query += "BY pi.Patent HAVING ColabCount > 1 ORDER BY ApplicationDate) AS a INNER JOIN "
-            query += "(SELECT ppi.Patent AS ID, Count(DISTINCT i.ID) AS InventorsWithExp, Count( "
-            query += "DISTINCT p.ID) AS UniquePatents, Count(DISTINCT c.ID) AS UniqueCompanies, "
-            query += "Count(DISTINCT c.Industry) AS UniqueIndustries, Count(DISTINCT p.Class) AS "
-            query += "UniquePatentClasses FROM PatentsInventors AS pi INNER JOIN (SELECT Inventor, "
-            query += "Patent, ApplicationDate FROM PatentsInventors AS pi INNER JOIN Patents AS p "
-            query += "ON p.ID = pi.Patent WHERE Patent = '%s' AND ApplicationDate IS NOT NULL) " % patent[
-                0]
-            query += "AS ppi ON ppi.Inventor = pi.Inventor INNER JOIN Patents AS p ON p.ID = pi.Patent "
-            query += "INNER JOIN Inventors AS i ON i.ID = pi.Inventor INNER JOIN Companies AS c "
-            query += "ON c.ID = p.Company WHERE p.ID != ppi.Patent AND p.ApplicationDate <= ppi.ApplicationDate) "
-            query += "AS b ON a.ID = b.ID INNER JOIN (SELECT a.ID, Count(*) Collaborations FROM ( "
-            query += "SELECT ppi.ID, pi.Patent, pi.Inventor FROM PatentsInventors AS pi INNER JOIN "
-            query += "(SELECT p.ID, Inventor, Patent, ApplicationDate FROM PatentsInventors AS pi "
-            query += "INNER JOIN Patents AS p ON p.ID = pi.Patent WHERE Patent = '%s' AND " % patent[
-                0]
-            query += "ApplicationDate IS NOT NULL) AS ppi ON ppi.Inventor = pi.Inventor INNER JOIN "
-            query += "Patents AS p ON p.ID = pi.Patent WHERE p.ID != ppi.Patent AND p.ApplicationDate "
-            query += "<= ppi.ApplicationDate) AS a JOIN (SELECT pi.Patent, pi.Inventor FROM "
-            query += "PatentsInventors AS pi INNER JOIN (SELECT Inventor, Patent, ApplicationDate "
-            query += "FROM PatentsInventors AS pi INNER JOIN Patents AS p ON p.ID = pi.Patent "
-            query += "WHERE Patent = '%s' AND ApplicationDate IS NOT NULL) AS ppi ON ppi.Inventor " % patent[
-                0]
-            query += "= pi.Inventor INNER JOIN Patents AS p ON p.ID = pi.Patent WHERE p.ID != ppi.Patent "
-            query += "AND p.ApplicationDate <= ppi.ApplicationDate) AS b ON a.Patent = b.Patent "
-            query += "AND a.Inventor < b.Inventor) AS c ON c.ID = a.ID GROUP BY a.ID;"
+            query = "SELECT "
+            query += "IFNULL(PatentScore.Inventors,0) InventorsWithExp, "
+            query += "IFNULL(PatentScore.Patents,0) UniquePatents, "
+            query += "IFNULL(PatentScore.Companies,0) UniqueCompanies, "
+            query += "IFNULL(PatentScore.Industries,0) UniqueIndustries, "
+            query += "IFNULL(PatentScore.Classifications,0) UniquePatentClasses, "
+            query += "IFNULL(Collaborations.Collaborations,0) Collaborations, "
+            query += "IFNULL(StarInventors.StarInventors,0) StarInventors, "
+            query += "IFNULL(InventorScore.Patents,0) InventorPatents, "
+            query += "IFNULL(InventorScore.Companies,0) InventorCompanies, "
+            query += "IFNULL(InventorScore.Industries,0) InventorIndustries, "
+            query += "IFNULL(InventorScore.Classifications,0) InventorPatentClasses "
+            query += "FROM "
+            query += "(SELECT "
+            query += "COUNT(DISTINCT Inventor) Inventors, "
+            query += "SUM(Patents) Patents, "
+            query += "SUM(Companies) Companies, "
+            query += "SUM(Industries) Industries, "
+            query += "SUM(Classifications) Classifications "
+            query += "FROM "
+            query += "(SELECT "
+            query += "Inventor, "
+            query += "COUNT(DISTINCT p.ID) Patents, "
+            query += "COUNT(DISTINCT p.Company) Companies, "
+            query += "COUNT(DISTINCT Industry) Industries, "
+            query += "COUNT(DISTINCT Class) Classifications "
+            query += "FROM "
+            query += "PatentsInventors AS pi "
+            query += "INNER JOIN "
+            query += "Patents AS p ON p.ID=pi.Patent "
+            query += "INNER JOIN "
+            query += "Companies AS c ON c.ID=p.Company "
+            query += "JOIN "
+            query += "(SELECT AppDate FROM Patents WHERE ID='%s') AS t1 " % str(
+                patent[0])
+            query += "WHERE "
+            query += "pi.Inventor IN (SELECT Inventor FROM PatentsInventors WHERE Patent='%s') " % str(
+                patent[0])
+            query += "AND "
+            query += "p.AppDate<t1.AppDate "
+            query += "GROUP BY "
+            query += "Inventor) AS t1) AS InventorScore "
+            query += "JOIN "
+            query += "(SELECT "
+            query += "COUNT(DISTINCT pi.Inventor) Inventors, "
+            query += "COUNT(DISTINCT c.ID) Companies, "
+            query += "COUNT(DISTINCT p.ID) Patents, "
+            query += "COUNT(DISTINCT c.Industry) Industries, "
+            query += "COUNT(DISTINCT p.Class) Classifications "
+            query += "FROM "
+            query += "PatentsInventors AS pi "
+            query += "INNER JOIN "
+            query += "Patents AS p ON p.ID=pi.Patent "
+            query += "INNER JOIN "
+            query += "Companies AS c ON c.ID=p.Company "
+            query += "JOIN "
+            query += "(SELECT AppDate FROM Patents WHERE ID='%s') AS pInfo " % str(
+                patent[0])
+            query += "WHERE "
+            query += "Inventor IN (SELECT Inventor FROM PatentsInventors WHERE Patent='%s') " % str(
+                patent[0])
+            query += "AND "
+            query += "p.AppDate<pInfo.AppDate) AS PatentScore "
+            query += "JOIN "
+            query += "(SELECT COUNT(*) AS Collaborations "
+            query += "FROM ( "
+            query += "SELECT Inventor "
+            query += ",Patent "
+            query += "FROM PatentsInventors AS pi "
+            query += "INNER JOIN Patents AS p ON pi.Patent = p.ID "
+            query += "INNER JOIN ( "
+            query += "SELECT AppDate "
+            query += "FROM Patents "
+            query += "WHERE ID = '%s' " % str(patent[0])
+            query += ") AS t1 "
+            query += "WHERE Inventor IN ( "
+            query += "SELECT Inventor "
+            query += "FROM PatentsInventors "
+            query += "WHERE Patent = '%s' " % str(patent[0])
+            query += ") "
+            query += "AND p.AppDate < t1.AppDate "
+            query += ") AS x "
+            query += "INNER JOIN ( "
+            query += "SELECT Inventor "
+            query += ",Patent "
+            query += "FROM PatentsInventors AS pi "
+            query += "INNER JOIN Patents AS p ON pi.Patent = p.ID "
+            query += "INNER JOIN ( "
+            query += "SELECT AppDate "
+            query += "FROM Patents "
+            query += "WHERE ID = '%s' " % str(patent[0])
+            query += ") AS t1 "
+            query += "WHERE Inventor IN ( "
+            query += "SELECT Inventor "
+            query += "FROM PatentsInventors "
+            query += "WHERE Patent = '%s' " % str(patent[0])
+            query += ") "
+            query += "AND p.AppDate < t1.AppDate "
+            query += ") AS y ON x.Patent = y.Patent "
+            query += "AND x.Inventor < y.Inventor) AS Collaborations "
+            query += "JOIN "
+            query += "(SELECT "
+            query += "COUNT(DISTINCT Inventor) StarInventors "
+            query += "FROM "
+            query += "StarInventors AS si "
+            query += "JOIN "
+            query += "(SELECT AppDate FROM Patents WHERE ID='%s') AS pInfo " % str(
+                patent[0])
+            query += "WHERE "
+            query += "Inventor IN (SELECT Inventor FROM PatentsInventors WHERE Patent='%s') " % str(
+                patent[0])
+            query += "AND "
+            query += "si.AppDate<pInfo.AppDate) AS StarInventors;"
 
             db['cursor'].execute(query)
             result = db['cursor'].fetchone()
+
             if result is None:
                 patentScore.append({"patentID": str(patent[0]),
                                     "applicationDate": str(patent[1]),
@@ -85,40 +162,55 @@ def main(argv):
                                     "uniCompanies": 0,
                                     "uniIndustries": 0,
                                     "uniPatentClasses": 0,
-                                    "collaborations": 0})
+                                    "collaborations": 0,
+                                    "starInventors": 0,
+                                    "invPatents": 0,
+                                    "invCompanies": 0,
+                                    "invIndustries": 0,
+                                    "invPatentClasses": 0})
             else:
                 patentScore.append({"patentID": str(patent[0]),
                                     "applicationDate": str(patent[1]),
-                                    "invWithExp": int(result[1]),
-                                    "uniPatents": int(result[2]),
-                                    "uniCompanies": int(result[3]),
-                                    "uniIndustries": int(result[4]),
-                                    "uniPatentClasses": int(result[5]),
-                                    "collaborations": int(result[6])})
+                                    "invWithExp": int(result[0]),
+                                    "uniPatents": int(result[1]),
+                                    "uniCompanies": int(result[2]),
+                                    "uniIndustries": int(result[3]),
+                                    "uniPatentClasses": int(result[4]),
+                                    "collaborations": int(result[5]),
+                                    "starInventors": int(result[6]),
+                                    "invPatents": int(result[7]),
+                                    "invCompanies": int(result[8]),
+                                    "invIndustries": int(result[9]),
+                                    "invPatentClasses": int(result[10])})
 
-        query = "INSERT INTO "
-        query += "PatentScore "
+        query = "INSERT IGNORE INTO "
+        query += "PatentScoresV4 "
         query += "(Patent, "
         query += "InventorsWithExp, "
         query += "UniquePatents, "
         query += "UniqueCompanies, "
         query += "UniqueIndustries, "
         query += "UniquePatentClasses, "
-        query += "Collaborations) "
+        query += "Collaborations, "
+        query += "StarInventors, "
+        query += "InventorPatents, "
+        query += "InventorCompanies, "
+        query += "InventorIndustries, "
+        query += "InventorPatentClasses) "
         query += "VALUES "
 
         for score in patentScore:
-            query += "('%s', %d, %d, %d, %d, %d, %d)," % (score['patentID'], score['invWithExp'], score[
-                'uniPatents'], score['uniCompanies'], score['uniIndustries'], score['uniPatentClasses'], score['collaborations'])
+            query += "('%s', %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d),\n" % (score['patentID'], score['invWithExp'], score[
+                'uniPatents'], score['uniCompanies'], score['uniIndustries'], score['uniPatentClasses'], score['collaborations'], score['starInventors'], score['invPatents'], score['invCompanies'], score['invIndustries'], score['invPatentClasses'])
 
-        query = query[:-1] + ";"
+        query = query[:-2] + ";"
 
         try:
             db['cursor'].execute(query)
             db['database'].commit()
         except:
             print query
-            exit(0)
+            sys.exit(0)
 
         progress = float(page + 1) / pages
         sys.stdout.write('\rProcessed %s' %

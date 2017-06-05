@@ -2,7 +2,7 @@ version: '2'
 
 services:
   sequel:
-    image: mysql:latest
+    image: pletron/patents:latest
     volumes:
       - ./files/data:/var/lib/mysql-files
     environment:
